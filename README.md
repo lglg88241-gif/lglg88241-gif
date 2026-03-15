@@ -1,5 +1,5 @@
 ## Hi there 👋
-
+“我是一名正在进阶的 Python 后端开发者”
 <!--
 **lglg88241-gif/lglg88241-gif** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 
