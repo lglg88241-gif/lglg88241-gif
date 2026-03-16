@@ -1,1 +1,2 @@
-Apple is red.
+Apple is green.
+Banana is yellow.
