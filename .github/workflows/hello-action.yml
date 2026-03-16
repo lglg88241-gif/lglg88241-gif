@@ -1,0 +1,17 @@
+﻿name: My First Robot
+on: [push]
+jobs:
+  say-hello:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Robot Greeting
+        run: |
+          echo "Hello, lglg88241-gif!"
+          python --version
+          echo "你的云端机器人已经成功启动并跑完了 Python 环境检查！"
