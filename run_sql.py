@@ -22,7 +22,15 @@ cursor.execute("INSERT INTO heroes (name, level, is_active) VALUES ('lglg88241-g
 cursor.execute("INSERT INTO heroes (name, level, is_active) VALUES ('Git_Monster', 15, 0)")
 cursor.execute("INSERT INTO heroes (name, level, is_active) VALUES ('Python_Novice', 5, 1)")
 conn.commit()
-
+# ================= 新增实战区域 =================
+print("\n[系统提示] 正在执行数据更新和清理...")
+cursor.execute("""
+UPDATE heroes SET level = 20 ,is_active = 1
+                WHERE name = 'Git_Monster'
+""")
+# D - 删 (DELETE)：踢出等级小于 10 的菜鸟 (Python_Novice 惨遭淘汰)
+cursor.execute("DELETE FROM heroes WHERE level < 10")
+conn.commit()
 # 5. 查 (SELECT & Operators) - 找出等级大于 10 且活跃的英雄
 print("🔍 正在执行 SQL 查询...")
 print("---------------------------------")
