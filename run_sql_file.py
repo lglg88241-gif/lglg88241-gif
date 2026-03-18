@@ -14,7 +14,7 @@ cursor.executescript(sql_script)
 # 2. 验证阶段三的视图 (直接查我们刚才在 SQL 里建好的虚拟表)
 print("📊 [视图查询结果] 全服玩家装备面板：")
 for row in cursor.execute("SELECT * FROM v_player_details"):
-    print(f"玩家: {row[0]:<10} | 等级: {row[1]:<3} | 职业: {row[2]:<8} | 装备: {row[3]}")
+    print(f"玩家: {row[0]:<10} | 等级: {row[1]:<3} | 职业: {row[2]:<8} | 装备: {row[3]:<15} | 金币: {row[4]:<5}")
 
 print("\n📈 [统计查询结果] 正在内卷的职业 (人数 > 1)：")
 # 验证聚合查询 (分组 + 二次过滤)

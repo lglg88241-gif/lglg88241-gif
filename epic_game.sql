@@ -6,9 +6,9 @@ PRAGMA foreign_keys = ON;
 
 DROP VIEW IF EXISTS v_player_details;
 DROP TABLE IF EXISTS inventory;
+DROP TABLE IF EXISTS assets;
 DROP TABLE IF EXISTS players;
 DROP TABLE IF EXISTS classes;
-
 -- 1. 职业表 (字典表)
 CREATE TABLE classes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,7 +31,14 @@ CREATE TABLE inventory (
     item_name VARCHAR(50) NOT NULL,
     FOREIGN KEY (owner_id) REFERENCES players(player_id) ON DELETE CASCADE
 );
-
+-- 4. 资产表 (附属表)
+CREATE TABLE assets (
+    asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id INTEGER,
+    gold INTEGER DEFAULT 0 CHECK (gold >= 0),
+    diamond INTEGER DEFAULT 0 CHECK (diamond >= 0),
+    FOREIGN KEY (owner_id) REFERENCES players(player_id) ON DELETE CASCADE
+);
 -- =========================================
 -- ✍️ 阶段二：造物主降临 (插入测试数据)
 -- =========================================
@@ -51,7 +58,13 @@ INSERT INTO inventory (item_name, owner_id) VALUES
 ('Magic Wand', 3),    -- 梅林的法杖
 ('Elf Bow', 4);       -- 甘道夫拿了弓？(乱发的)
 -- 注意：5 号玩家 Rookie 没有任何装备数据
-
+-- 给每个玩家默认50点金币
+INSERT INTO assets (owner_id, gold) VALUES
+(1, 50),
+(2, 50),
+(3, 50),
+(4, 50),
+(5, 50);
 -- =========================================
 -- 👁️ 阶段三：情报中心 (极其干练的查询与视图)
 -- =========================================
@@ -60,7 +73,12 @@ SELECT
     p.user_name, 
     p.level, 
     c.class_name, 
-    COALESCE(i.item_name, '【包裹空空如也】') AS equipment -- 空值处理神器
+    COALESCE(i.item_name, '【包裹空空如也】') AS equipment, -- 空值处理神器
+    a.gold
 FROM players p
-INNER JOIN classes c ON p.class_id = c.id    -- 玩家肯定有职业，用 INNER
-LEFT JOIN inventory i ON p.player_id = i.owner_id; -- 玩家不一定有装备，必须用 LEFT
+INNER JOIN classes c ON p.class_id = c.id -- 玩家肯定有职业，用 INNER
+INNER JOIN assets a ON p.player_id = a.owner_id
+LEFT JOIN inventory i ON p.player_id = i.owner_id;-- 玩家不一定有装备，必须用 LEFT
+
+
+
