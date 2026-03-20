@@ -39,40 +39,45 @@ def read_root():
     return {"message": "👑 欢迎来到 Epic Game API 数据中心!"}
 
 # ==========================================
-# 🌐 API 7: 视察公会大厅 (HTTP GET - 获取全员名单)
-# URL 示例: GET /players/
+# 🌐 API 7: 视察公会大厅 (HTTP GET - 终极人类友好版: Page / Size)
+# URL 示例: GET /players/?page=1&size=10
 # ==========================================
 @app.get("/players/")
-def get_all_players():
-    logger.info("收到大厅视察请求: 正在拉取全服公会成员花名册...")
+def get_all_players(page: int = 1, size: int = 10): # 👈 变成了人类最熟悉的页码和每页数量
+    # 1. 终极防御：防止乱填页码和数量
+    if page < 1:
+        page = 1
+    if size > 100:
+        size = 100
+        
+    # 2. 🌟 你的核心思想：在后端内部把 page 转换成数据库需要的 skip
+    skip = (page - 1) * size
+    
+    logger.info(f"视察大厅: 请求第 {page} 页，每页 {size} 人 (底层换算: 跳过 {skip} 人)...")
     
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        # 直接查询你之前写好的那个神级视图，不加 WHERE 条件，就是全表扫描！
-        cursor.execute("SELECT * FROM v_player_details")
-        
-        # 🌟 核心魔法：fetchall() 会把查到的所有行，打包成一个列表 (List)
+        # SQL 依然需要 LIMIT 和 OFFSET，只是我们把参数换成了内部计算好的变量
+        cursor.execute(
+            "SELECT * FROM v_player_details LIMIT ? OFFSET ?",
+            (size, skip)
+        )
         players = cursor.fetchall()
         
-        if players:
-            # 列表推导式：把列表里的每一行数据，都优雅地转换成 Python 字典
-            player_list = [dict(p) for p in players]
-            
-            logger.info(f"✅ 视察完毕：当前公会共有 {len(player_list)} 名正式成员。")
-            return {
-                "message": "👑 史诗公会花名册",
-                "total_members": len(player_list),
-                "members": player_list
-            }
-        else:
-            logger.info("ℹ️ 大厅空无一人。")
-            return {
-                "message": "公会刚刚建立，还没有任何人加入哦~", 
-                "total_members": 0,
-                "members": []
-            }
+        player_list = [dict(p) for p in players]
+        
+        logger.info(f"✅ 视察完毕：第 {page} 页拉取成功，返回了 {len(player_list)} 名成员。")
+        return {
+            "message": "👑 史诗公会花名册",
+            "pagination": { 
+                "current_page": page,   # 告诉前端当前是第几页
+                "page_size": size,      # 每页容量
+                "returned_count": len(player_list) # 本次实际拉取到的人数
+            },
+            "members": player_list
+        }
             
     except Exception as e:
         logger.error(f"❌ 花名册拉取失败：{e}")
