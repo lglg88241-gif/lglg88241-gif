@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from typing import Annotated
 from jwt.exceptions import InvalidTokenError
 
-SECRET_KEY = "your-super-secret-key-12345"
+SECRET_KEY = "your-super-secret-key-12345-epic-game-api-is-awesome"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
