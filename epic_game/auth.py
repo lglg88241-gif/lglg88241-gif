@@ -30,8 +30,8 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
+# 🌟 升级 1：安检员现在会同时读取用户名和角色
 def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
-    """安检员：验证令牌并返回当前用户"""
     credentials_exception = HTTPException(
         status_code=401,
         detail="无效的登录凭证或令牌已过期",
@@ -40,8 +40,18 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
+        role: str = payload.get("role") # 👈 提取令牌里的身份牌
+        
         if username is None:
             raise credentials_exception
-        return username
+            
+        # 返回一个包含丰富信息的字典
+        return {"username": username, "role": role}
     except InvalidTokenError:
         raise credentials_exception
+# 🌟 升级 2：新设“管理员专属安检通道”
+def get_current_admin(current_user: Annotated[dict, Depends(get_current_user)]):
+    # 如果查出你的身份不是 admin，直接一脚踢飞，返回 403 权限不足！
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="🚨 越权警告：只有公会管理员才能执行此神圣指令！")
+    return current_user
