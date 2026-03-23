@@ -1,7 +1,13 @@
+from datetime import datetime, timedelta # 👈 处理过期时间
 from fastapi import FastAPI, HTTPException # 👈 引入 HTTPException，用来优雅地报错
 from pydantic import BaseModel, Field # 👈 引入 Pydantic 的 Field，它是校验神器！
 import sqlite3
 import logging 
+import bcrypt # 👈 换成这个
+from fastapi.security import OAuth2PasswordBearer # 👈 引入安全组件
+from typing import Annotated # 建议使用 Annotated 让代码更现代
+import jwt
+from jwt.exceptions import InvalidTokenError
 
 logging.basicConfig(
     level=logging.INFO, 
@@ -11,7 +17,67 @@ logging.basicConfig(
 logger = logging.getLogger("EpicGameAPI")
 
 app = FastAPI()
+# ==========================================
+# 🔐 密码安全管家 (实例化 bcrypt 引擎)
+# ==========================================
+def get_password_hash(password: str):
+    """将明文密码变成哈希乱码"""
+    # bcrypt 要求输入必须是 bytes 格式
+    pwd_bytes = password.encode('utf-8')
+    # 生成盐并加密
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(pwd_bytes, salt)
+    # 返回解码后的字符串以便存入数据库
+    return hashed.decode('utf-8')
 
+def verify_password(plain_password: str, hashed_password: str):
+    """校验：明文密码 和 数据库里的乱码 是否匹配"""
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode('utf-8'), 
+            hashed_password.encode('utf-8')
+        )
+    except Exception:
+        return False
+
+# ==========================================
+# 🔐 JWT 核心配置 (绝对不能泄露的秘密)
+# ==========================================
+SECRET_KEY = "your-super-secret-key-12345" # 实际项目建议放环境变量
+ALGORITHM = "HS256" # 加密算法
+ACCESS_TOKEN_EXPIRE_MINUTES = 30 # 令牌 30 分钟后失效
+
+# 1. 告诉 FastAPI：去哪里找令牌？(就在 /login 接口找)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+# 2. 编写“安检员”函数：解析并验证令牌
+def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="无效的登录凭证",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        # 解码令牌
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        return username # 返回当前登录的用户名
+    except InvalidTokenError:
+        raise credentials_exception
+def create_access_token(data: dict):
+    """打造一张数字门票 (JWT)"""
+    to_encode = data.copy()
+    # 设置过期时间
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    # 签名并生成字符串
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+# ... (保留 get_db_connection, NewPlayer, LoginData) ...
+
+# ==========================================
 def get_db_connection():
     conn = sqlite3.connect('epic_game.sqlite')
     conn.row_factory = sqlite3.Row 
@@ -20,19 +86,20 @@ def get_db_connection():
     return conn
 
 # ==========================================
-# 🛡️ 终极安保队长 Pydantic 升级版！
+# 🛡️ Pydantic: 改造注册数据 (加入密码字段)
 # ==========================================
 class NewPlayer(BaseModel):
-    # 限制名字长度：不能空，最多 20 个字符
-    user_name: str = Field(..., min_length=1, max_length=20, description="玩家名称")
-    # 🌟 核心防御：限制职业 ID 必须大等于 1，且小等于 3！
-    class_id: int = Field(..., ge=1, le=3, description="职业ID (1:战士, 2:法师, 3:射手)")
+    user_name: str = Field(..., min_length=1, max_length=20)
+    password: str = Field(..., min_length=6, description="密码至少6位") # 👈 新增密码安检
+    class_id: int = Field(..., ge=1, le=3)
 
-CLASS_MAP = {
-    1: "战士 (Warrior)",
-    2: "法师 (Mage)",
-    3: "射手 (Archer)"
-}
+# 🛡️ Pydantic: 纯粹的登录数据格式
+class LoginData(BaseModel):
+    user_name: str
+    password: str
+
+CLASS_MAP = {1: "战士 (Warrior)", 2: "法师 (Mage)", 3: "射手 (Archer)"}
+
 
 @app.get("/")
 def read_root():
@@ -98,46 +165,65 @@ def get_player(player_name: str):
         # 使用 HTTPException 抛出标准的 404 错误
         raise HTTPException(status_code=404, detail=f"未找到名为 {player_name} 的玩家")
 
+# ==========================================
+# 🌐 改造 API 3: 注册新玩家 (现在会自动加密密码了！)
+# ==========================================
 @app.post("/players/")
 def create_player(player: NewPlayer):
-    # 因为 Pydantic 已经挡住了所有非法输入，
-    # 所以走到这一步的 class_id 绝对只有 1, 2, 3 这三种可能！
-    class_name_str = CLASS_MAP[player.class_id]
-    
-    logger.info(f"收到合法注册请求: 玩家 '{player.user_name}', 职业: {class_name_str}")
+    class_name_str = CLASS_MAP.get(player.class_id, "未知职业")
+    logger.info(f"收到注册请求: '{player.user_name}'")
     
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
+        # 1. 把前端传来的明文密码 (如 123456) 瞬间变成哈希乱码
+        hashed_pwd = get_password_hash(player.password)
+        
+        # 2. 存入数据库的是乱码 (password_hash)！
         cursor.execute(
-            "INSERT INTO players (user_name, class_id) VALUES (?, ?)", 
-            (player.user_name, player.class_id)
+            "INSERT INTO players (user_name, class_id, password_hash) VALUES (?, ?, ?)", 
+            (player.user_name, player.class_id, hashed_pwd)
         )
         new_player_id = cursor.lastrowid 
         
-        cursor.execute(
-            "INSERT INTO assets (owner_id, gold) VALUES (?, ?)", 
-            (new_player_id, 50)
-        )
-        
+        cursor.execute("INSERT INTO assets (owner_id, gold) VALUES (?, ?)", (new_player_id, 50))
         conn.commit()
-        logger.info(f"🎉 注册大捷：'{player.user_name}' 入库成功！")
         
-        return {
-            "message": "🎉 注册成功！",
-            "details": f"新进 {class_name_str} 【{player.user_name}】 已加入公会，并获得了 50 枚初始金币！"
-        }
-        
+        return {"message": f"🎉 注册成功！请牢记您的密码。"}
     except sqlite3.IntegrityError:
         conn.rollback()
-        logger.error(f"❌ 注册拒绝：名字 '{player.user_name}' 冲突！")
-        # 名字冲突属于前端传来的数据不合规，标准做法是抛出 400 错误
-        raise HTTPException(status_code=400, detail="注册失败，该玩家名字已被占用！")
+        raise HTTPException(status_code=400, detail="该玩家名字已被占用！")
     finally:
         conn.close()
 
-
+# ==========================================
+# 🚀 升级 API 8: 登录并颁发令牌
+# ==========================================
+@app.post("/login")
+def login(data: LoginData):
+    logger.info(f"🛡️ 登录请求: 玩家 '{data.user_name}'")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT password_hash FROM players WHERE user_name = ?", (data.user_name,))
+        user_record = cursor.fetchone()
+        
+        if not user_record or not verify_password(data.password, user_record["password_hash"]):
+            raise HTTPException(status_code=401, detail="用户名或密码错误")
+            
+        # 🌟 核心时刻：身份确认，颁发令牌！
+        # 我们把玩家名字塞进令牌里，这样以后我们就知道是谁在发请求
+        access_token = create_access_token(data={"sub": data.user_name})
+        
+        logger.info(f"✅ 登录成功：已为 '{data.user_name}' 颁发 JWT 令牌")
+        return {
+            "access_token": access_token,
+            "token_type": "bearer" # 告诉前端，这是一个 Bearer 类型的令牌
+        }
+    finally:
+        conn.close()
 class GoldUpdate(BaseModel):
     # 限定增加的金币数量必须是正数，不能为负（防止黑客反向扣钱）
     add_gold: int = Field(..., gt=0, description="要增加的金币数量")
