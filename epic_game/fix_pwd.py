@@ -1,5 +1,9 @@
 import sqlite3
+from pathlib import Path
 from auth import get_password_hash
+
+
+DB_PATH = Path(__file__).resolve().parent / "epic_game.sqlite"
 
 def fix_all_passwords():
     print("⏳ 正在修复老玩家的密码哈希...")
@@ -7,7 +11,7 @@ def fix_all_passwords():
     # 1. 调用你自己的 auth.py，生成一个绝对正确的 "123456" 乱码
     correct_hash = get_password_hash("123456")
     
-    conn = sqlite3.connect('epic_game.sqlite')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     try:

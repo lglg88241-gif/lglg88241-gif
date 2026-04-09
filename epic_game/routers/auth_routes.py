@@ -1,16 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from typing import Annotated
 import logging
 from database import get_db_connection
 from auth import verify_password, create_access_token
+from limiter import limiter
 
 logger = logging.getLogger("EpicGameAPI")
 router = APIRouter(tags=["认证中心"]) # 标签用于在 Swagger 中分类
 
 @router.post("/login")
+@limiter.limit("5/minute")
 # 💡 核心变化：使用 OAuth2PasswordRequestForm 完美对接 Swagger UI 的小锁头
-def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+def login(request: Request, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
     logger.info(f"🛡️ 登录请求: '{form_data.username}'")
     
     conn = get_db_connection()

@@ -1,10 +1,11 @@
 import bcrypt
 import jwt
 from datetime import datetime, timedelta
-from fastapi import HTTPException, Depends
+from fastapi import HTTPException, Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from typing import Annotated
 from jwt.exceptions import InvalidTokenError
+from limiter import user_role_ctx
 
 SECRET_KEY = "your-super-secret-key-12345-epic-game-api-is-awesome"
 ALGORITHM = "HS256"
@@ -31,7 +32,7 @@ def create_access_token(data: dict):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 # 🌟 升级 1：安检员现在会同时读取用户名和角色
-def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+def get_current_user(request: Request, token: Annotated[str, Depends(oauth2_scheme)]):
     credentials_exception = HTTPException(
         status_code=401,
         detail="无效的登录凭证或令牌已过期",
@@ -46,6 +47,8 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
             raise credentials_exception
             
         # 返回一个包含丰富信息的字典
+        request.state.user_role = role
+        user_role_ctx.set(role)
         return {"username": username, "role": role}
     except InvalidTokenError:
         raise credentials_exception

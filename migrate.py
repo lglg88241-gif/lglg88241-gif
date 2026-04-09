@@ -1,8 +1,12 @@
 import sqlite3
+from pathlib import Path
+
+
+DB_PATH = Path(__file__).resolve().parent / "epic_game" / "epic_game.sqlite"
 
 def run_migration():
     print("⏳ 正在执行数据库平滑升级...")
-    conn = sqlite3.connect('epic_game.sqlite')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # 这串火星文，正是 "123456" 经过 bcrypt 算法加密后的散列值！

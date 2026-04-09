@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import Annotated
 import logging
 import sqlite3
@@ -6,6 +6,7 @@ from database import get_db_connection
 from schemas import NewPlayer, GoldUpdate, NewWeapon
 # 🌟 确保引入了两种安检员：普通安检员(User) 和 霸道保安(Admin)
 from auth import get_password_hash, get_current_user, get_current_admin 
+from limiter import is_admin_exempt, limiter
 
 logger = logging.getLogger("EpicGameAPI")
 router = APIRouter(prefix="/players", tags=["公会大厅 (玩家管理)"])
@@ -16,7 +17,9 @@ CLASS_MAP = {1: "战士 (Warrior)", 2: "法师 (Mage)", 3: "射手 (Archer)"}
 # 🔒 [已上锁] 获取全服名单 (需要普通登录)
 # ==========================================
 @router.get("/")
+@limiter.limit("10/minute", exempt_when=is_admin_exempt)
 def get_all_players(
+    request: Request,
     current_user: Annotated[dict, Depends(get_current_user)],
     page: int = 1, 
     size: int = 10
@@ -35,7 +38,9 @@ def get_all_players(
 # 🔒 [已上锁] 查看单个玩家详细信息 (需要普通登录)
 # ==========================================
 @router.get("/{player_name}")
+@limiter.limit("10/minute", exempt_when=is_admin_exempt)
 def get_player(
+    request: Request,
     player_name: str,
     current_user: Annotated[dict, Depends(get_current_user)] # 👈 加锁
 ):
@@ -51,7 +56,8 @@ def get_player(
 # 🌐 [开放] 注册新玩家 (绝对不能上锁，否则没人能注册了)
 # ==========================================
 @router.post("/")
-def create_player(player: NewPlayer):
+@limiter.limit("3/minute")
+def create_player(request: Request, player: NewPlayer):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
