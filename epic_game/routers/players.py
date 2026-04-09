@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi_cache.decorator import cache
 from typing import Annotated
 import logging
 import sqlite3
@@ -18,6 +19,7 @@ CLASS_MAP = {1: "战士 (Warrior)", 2: "法师 (Mage)", 3: "射手 (Archer)"}
 # ==========================================
 @router.get("/")
 @limiter.limit("10/minute", exempt_when=is_admin_exempt)
+@cache(expire=60)
 def get_all_players(
     request: Request,
     current_user: Annotated[dict, Depends(get_current_user)],
@@ -28,6 +30,7 @@ def get_all_players(
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        logger.info("真实触发了业务逻辑：正在查询数据库...")
         cursor.execute("SELECT * FROM v_player_details LIMIT ? OFFSET ?", (size, skip))
         players = [dict(p) for p in cursor.fetchall()]
         return {"message": f"欢迎回来，{current_user['username']}！这是公会花名册", "pagination": {"page": page, "size": size}, "members": players}

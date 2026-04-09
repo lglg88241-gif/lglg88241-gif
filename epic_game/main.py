@@ -1,4 +1,6 @@
 from fastapi import FastAPI, Request
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.inmemory import InMemoryBackend
 import logging
 import jwt
 from jwt.exceptions import InvalidTokenError
@@ -23,6 +25,10 @@ app = FastAPI(
 )
 
 # 3. 接入各个“部门”的路由表
+@app.on_event("startup")
+async def startup():
+    FastAPICache.init(InMemoryBackend())
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
