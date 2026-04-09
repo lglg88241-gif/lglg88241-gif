@@ -1,15 +1,24 @@
-from fastapi import FastAPI, Request
-from fastapi_cache import FastAPICache
-from fastapi_cache.backends.inmemory import InMemoryBackend
 import logging
 import time
+
 import jwt
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.inmemory import InMemoryBackend
 from jwt.exceptions import InvalidTokenError
-from routers import players, auth_routes
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+
 from auth import ALGORITHM, SECRET_KEY
 from limiter import limiter, user_role_ctx
+
+
+class GameBusinessError(Exception):
+    pass
+
+
+from routers import auth_routes, players
 
 
 logging.basicConfig(
@@ -18,13 +27,13 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(
     title="Epic Game API",
     description="史诗公会全栈后台管理系统",
     version="2.0.0",
 )
-
-logger = logging.getLogger(__name__)
 
 
 @app.on_event("startup")
@@ -34,6 +43,18 @@ async def startup():
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(GameBusinessError)
+async def handle_game_business_error(request: Request, exc: GameBusinessError):
+    return JSONResponse(
+        status_code=400,
+        content={
+            "success": False,
+            "code": "BUSINESS_ERROR",
+            "message": str(exc),
+        },
+    )
 
 
 @app.middleware("http")
