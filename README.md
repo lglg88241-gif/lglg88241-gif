@@ -48,6 +48,7 @@
 - 普通用户查询玩家列表和玩家详情
 - 管理员发金币、发武器、删除玩家
 - 基于 `slowapi` 的请求限流
+- 基于 `fastapi-cache2` 的接口级内存缓存
 
 ### 当前限流规则
 
@@ -77,7 +78,7 @@
 建议先创建虚拟环境，再安装依赖：
 
 ```bash
-pip install fastapi uvicorn bcrypt pyjwt python-multipart slowapi
+pip install fastapi uvicorn bcrypt pyjwt python-multipart slowapi fastapi-cache2
 ```
 
 如果你要使用 FastAPI 的 `TestClient` 做测试，还需要：
