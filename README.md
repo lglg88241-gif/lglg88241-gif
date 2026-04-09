@@ -1,8 +1,8 @@
 # Epic Game API
 
-一个基于 FastAPI 和 SQLite 的练习项目，包含两部分内容：
+一个基于 FastAPI 和 SQLite 的练习项目，主要包含：
 
-- `epic_game/`：一个带登录鉴权和角色权限控制的游戏公会管理 API
+- `epic_game/`：游戏公会管理 API
 - 根目录下多个 `run_*.py`：用于演示 SQLite 常见操作的独立脚本
 
 ## 项目结构
@@ -10,29 +10,33 @@
 ```text
 .
 ├─ epic_game/
-│  ├─ main.py
 │  ├─ auth.py
 │  ├─ database.py
-│  ├─ schemas.py
 │  ├─ epic_game.sql
+│  ├─ epic_game.sqlite
+│  ├─ fix_pwd.py
+│  ├─ limiter.py
+│  ├─ main.py
+│  ├─ schemas.py
+│  ├─ upgrade_role.py
 │  └─ routers/
 │     ├─ auth_routes.py
 │     └─ players.py
 ├─ migrate.py
-├─ run_sql.py
+├─ run_all_joins.py
+├─ run_constraints.py
 ├─ run_ddl.py
 ├─ run_dml_group.py
 ├─ run_dml_joins.py
-├─ run_all_joins.py
-├─ run_subqueries.py
 ├─ run_functions.py
-├─ run_views.py
 ├─ run_indexes.py
-├─ run_constraints.py
-├─ run_transactions.py
 ├─ run_optimization.py
 ├─ run_security.py
-└─ run_sql_file.py
+├─ run_sql.py
+├─ run_sql_file.py
+├─ run_subqueries.py
+├─ run_transactions.py
+└─ run_views.py
 ```
 
 ## 功能概览
@@ -42,9 +46,21 @@
 - 玩家注册
 - 用户登录并签发 JWT
 - 普通用户查询玩家列表和玩家详情
-- 管理员为玩家发金币
-- 管理员发放武器
-- 管理员删除玩家
+- 管理员发金币、发武器、删除玩家
+- 基于 `slowapi` 的请求限流
+
+### 当前限流规则
+
+- `POST /login`：`5/minute`
+- `POST /players/`：`3/minute`
+- `GET /players/`：`10/minute`
+- `GET /players/{player_name}`：`10/minute`
+
+查询接口对管理员做了豁免：
+
+- 系统会先从 Bearer Token 中解析角色
+- 在请求进入路由前通过中间件把角色写入请求上下文
+- 当角色为 `admin` 时，`GET /players/` 和 `GET /players/{player_name}` 不受上述查询限流影响
 
 ### SQLite 练习脚本
 
@@ -61,18 +77,32 @@
 建议先创建虚拟环境，再安装依赖：
 
 ```bash
-pip install fastapi uvicorn bcrypt pyjwt python-multipart
+pip install fastapi uvicorn bcrypt pyjwt python-multipart slowapi
 ```
+
+如果你要使用 FastAPI 的 `TestClient` 做测试，还需要：
+
+```bash
+pip install httpx
+```
+
+## 数据库说明
+
+API 使用的数据库文件是：
+
+```text
+epic_game/epic_game.sqlite
+```
+
+当前代码已经改成基于文件位置解析数据库路径，所以：
+
+- 从仓库根目录启动可以正常连接数据库
+- 从 `epic_game/` 目录启动也可以正常连接数据库
+- `migrate.py` 和 `epic_game/fix_pwd.py` 也不再依赖当前工作目录
 
 ## 初始化数据库
 
-API 使用 `epic_game.sqlite` 作为数据库文件。
-
-1. 进入 `epic_game` 目录。
-2. 执行 SQL 初始化脚本。
-3. 如有需要，再执行迁移脚本补充密码字段。
-
-示例：
+如果你需要重新初始化：
 
 ```bash
 cd epic_game
@@ -84,11 +114,9 @@ python epic_game/fix_pwd.py
 
 说明：
 
-- `epic_game/epic_game.sql` 会创建表、视图并插入初始数据
-- `migrate.py` 会为 `players` 表补充 `password_hash`
-- `epic_game/fix_pwd.py` 会把已有玩家密码统一重置为 `123456`
-
-如果你的数据库已经是最新结构，可以跳过后两步。
+- `epic_game/epic_game.sql`：创建表、视图并插入初始数据
+- `migrate.py`：补充 `password_hash`
+- `epic_game/fix_pwd.py`：把已有玩家密码统一重置为 `123456`
 
 ## 启动 API
 
@@ -111,7 +139,7 @@ uvicorn epic_game.main:app --reload --app-dir epic_game
 POST /login
 ```
 
-该接口使用表单提交用户名和密码。登录成功后会返回 Bearer Token。
+该接口使用表单提交用户名和密码，成功后返回 Bearer Token。
 
 Swagger 中可以先调用 `/login`，再点击右上角 `Authorize`，填入：
 
@@ -165,9 +193,22 @@ Bearer <your_access_token>
 }
 ```
 
+## 当前默认账号
+
+根据当前数据库内容：
+
+- 管理员：`Arthur`
+- 普通用户示例：`Lancelot`
+
+如果你执行过 `epic_game/fix_pwd.py`，这些已有账号的密码会被统一重置为：
+
+```text
+123456
+```
+
 ## 独立脚本说明
 
-根目录下的 `run_*.py` 脚本默认操作 `my_first_db.sqlite` 或项目数据库，用于演示不同 SQL 主题。可直接运行，例如：
+根目录下的 `run_*.py` 脚本主要用于演示不同 SQL 主题，例如：
 
 ```bash
 python run_sql.py
@@ -179,13 +220,14 @@ python run_views.py
 
 ## 当前实现注意点
 
-- `SECRET_KEY` 目前直接写在 `epic_game/auth.py` 中，生产环境应改为环境变量
-- 数据库连接目前使用 SQLite 本地文件，适合练习和小规模测试
-- 仓库中部分输出文案存在编码显示问题，不影响主要逻辑阅读
+- `SECRET_KEY` 当前直接写在 `epic_game/auth.py` 中，生产环境应改为环境变量
+- 数据库仍然是本地 SQLite，适合练习和小规模测试
+- 限流是进程内生效的，单机开发环境没问题，但不适合作为生产级分布式限流方案
 
 ## 后续可改进方向
 
 - 增加 `requirements.txt`
 - 增加自动化测试
-- 用 Alembic 或自定义版本管理替代手动迁移
-- 将密钥和数据库路径提取到配置文件或环境变量
+- 把鉴权密钥和配置移到环境变量
+- 使用正式迁移工具替代手动脚本
+- 为限流增加更明确的错误响应格式和测试用例
