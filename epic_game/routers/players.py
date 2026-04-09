@@ -2,7 +2,7 @@ import logging
 import sqlite3
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi_cache.decorator import cache
 
 from auth import get_current_admin, get_current_user, get_password_hash
@@ -80,7 +80,9 @@ def create_player(request: Request, player: NewPlayer):
         return {"message": f"🎉 {player.user_name} 注册成功！"}
     except sqlite3.IntegrityError:
         conn.rollback()
-        raise HTTPException(status_code=400, detail="名字已被占用！")
+        from main import GameBusinessError
+
+        raise GameBusinessError("名字已被占用")
     finally:
         conn.close()
 
